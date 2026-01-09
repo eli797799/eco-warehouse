@@ -32,6 +32,23 @@ export default function MaterialsPage() {
 
   useEffect(() => {
     loadItems();
+
+    // Supabase Realtime subscription for items table
+    const itemsSubscription = supabase
+      .channel('items-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'items' },
+        () => {
+          loadItems();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(itemsSubscription);
+    };
   }, []);
 
   async function loadItems() {

@@ -37,6 +37,35 @@ export default function IssuePage() {
     }
 
     loadItems();
+
+    // Supabase Realtime subscriptions
+    const itemsSubscription = supabase
+      .channel('items-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'items' },
+        () => {
+          loadItems();
+        }
+      )
+      .subscribe();
+
+    const movementsSubscription = supabase
+      .channel('movements-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'inventory_movements' },
+        () => {
+          loadItems();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscriptions on unmount
+    return () => {
+      supabase.removeChannel(itemsSubscription);
+      supabase.removeChannel(movementsSubscription);
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

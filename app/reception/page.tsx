@@ -23,6 +23,23 @@ export default function ReceptionPage() {
 
   useEffect(() => {
     loadMovements();
+
+    // Supabase Realtime subscription for inventory_movements table
+    const movementsSubscription = supabase
+      .channel('movements-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'inventory_movements' },
+        () => {
+          loadMovements();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(movementsSubscription);
+    };
   }, [filterType]);
 
   async function loadMovements() {
