@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>הוספת מוצרים לדאטהבייס</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/module"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        h1 { color: #059669; }
+        button { background: #059669; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #047857; }
+        pre { background: #f0f0f0; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>הוספת מוצרים לדאטהבייס</h1>
+        <p>לחץ על הכפתור להוסיף מוצרים לדאטהבייס</p>
+        <button onclick="addProducts()">הוסף מוצרים</button>
+        <pre id="output"></pre>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/module';
+
+        window.addProducts = async function() {
+            const output = document.getElementById('output');
+            output.textContent = 'מעבד...';
+
+            const supabase = createClient(
+                'https://bswppvyrnubhtbhppdyg.supabase.co',
+                'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzd3BwdnlybnViaHRiaHBwZHlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY0MTczNDcsImV4cCI6MjA1MTk5NzM0N30.FKh4wJlBJDKY4BLvCaRPYw4m1NYBMfN-tWhC-nFvfIo'
+            );
+
+            const rawMaterials = [
+                { name: 'ניירות PLA', category: 'raw_material', current_stock: 1000, low_stock_threshold: 100 },
+                { name: 'ניירות קרטון', category: 'raw_material', current_stock: 800, low_stock_threshold: 80 },
+                { name: 'דבק אקולוגי', category: 'raw_material', current_stock: 500, low_stock_threshold: 50 },
+                { name: 'צבע טבעי', category: 'raw_material', current_stock: 300, low_stock_threshold: 30 },
+                { name: 'חומר ריפוד', category: 'raw_material', current_stock: 600, low_stock_threshold: 60 },
+            ];
+
+            const finishedProducts = [
+                { name: 'קעריה 250ml', category: 'finished_product', current_stock: 500, low_stock_threshold: 50, weight_per_unit: 0.12 },
+                { name: 'צלחת 150mm', category: 'finished_product', current_stock: 800, low_stock_threshold: 100, weight_per_unit: 0.15 },
+                { name: 'כוס 200ml', category: 'finished_product', current_stock: 300, low_stock_threshold: 30, weight_per_unit: 0.08 },
+                { name: 'מכסה קעריה', category: 'finished_product', current_stock: 600, low_stock_threshold: 60, weight_per_unit: 0.05 },
+                { name: 'קופסה אריזה', category: 'finished_product', current_stock: 400, low_stock_threshold: 40, weight_per_unit: 0.20 },
+            ];
+
+            try {
+                const allProducts = [...rawMaterials, ...finishedProducts];
+                const { error } = await supabase.from('products').insert(allProducts);
+                
+                if (error) {
+                    output.innerHTML = '<span class="error">❌ שגיאה: ' + error.message + '</span>';
+                } else {
+                    output.innerHTML = '<span class="success">✓ הוצאו ' + allProducts.length + ' מוצרים בהצלחה!</span>\n\nחומרי גלם:\n' +
+                        rawMaterials.map(p => '- ' + p.name).join('\n') + '\n\nמוצרים סופיים:\n' +
+                        finishedProducts.map(p => '- ' + p.name).join('\n');
+                }
+            } catch (err) {
+                output.innerHTML = '<span class="error">❌ שגיאה: ' + err.message + '</span>';
+            }
+        };
+    </script>
+</body>
+</html>
