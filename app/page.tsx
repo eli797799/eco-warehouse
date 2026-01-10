@@ -1,4 +1,5 @@
-import React from "react";
+'use client';
+import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type Item = {
@@ -17,71 +18,128 @@ type Movement = {
   created_at: string;
 };
 
-export default async function WarehouseDashboard() {
-  try {
-    // Fetch items baseline
-    const { data: itemsData, error: itemsError } = await supabase
-      .from("items")
-      .select("id,name,unit_type,min_stock");
-    if (itemsError) {
-      console.error("Error loading items:", itemsError);
-      throw new Error(`Failed to load items: ${itemsError.message}`);
+export default function WarehouseDashboard() {
+  const [items, setItems] = useState<Item[]>([]);
+  const [movements, setMovements] = useState<Movement[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        // Fetch items baseline
+        const { data: itemsData, error: itemsError } = await supabase
+          .from("items")
+          .select("id,name,unit_type,min_stock");
+        if (itemsError) {
+          console.error("Error loading items:", itemsError);
+          throw new Error(`Failed to load items: ${itemsError.message}`);
+        }
+
+        // Fetch all movements to aggregate
+        const { data: movementsData, error: movementsError } = await supabase
+          .from("inventory_movements")
+          .select("id,item_id,quantity,movement_type,notes,created_at")
+          .order("created_at", { ascending: false });
+
+        if (movementsError) {
+          console.error("Error loading movements:", movementsError);
+          throw new Error(`Failed to load movements: ${movementsError.message}`);
+        }
+
+        setItems(itemsData ?? []);
+        setMovements(movementsData ?? []);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error loading data:", err);
+        setLoading(false);
+      }
     }
 
-    // Fetch all movements to aggregate
-    const { data: movementsData, error: movementsError } = await supabase
-      .from("inventory_movements")
-      .select("id,item_id,quantity,movement_type,notes,created_at")
-      .order("created_at", { ascending: false });
+    loadData();
 
-    if (movementsError) {
-      console.error("Error loading movements:", movementsError);
-      throw new Error(`Failed to load movements: ${movementsError.message}`);
-    }
+    // Supabase Realtime subscriptions
+    const itemsSubscription = supabase
+      .channel('dashboard-items')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'items' },
+        () => {
+          console.log('🔄 Items changed, reloading...');
+          loadData();
+        }
+      )
+      .subscribe();
 
-    const items: Item[] = itemsData ?? [];
-    const movements: Movement[] = movementsData ?? [];
+    const movementsSubscription = supabase
+      .channel('dashboard-movements')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'inventory_movements' },
+        () => {
+          console.log('🔄 Movements changed, reloading...');
+          loadData();
+        }
+      )
+      .subscribe();
 
-    // Build maps
-    const itemMap = new Map(items.map((i) => [i.id, i]));
-    const stockMap = new Map<string, number>();
+    // Cleanup subscriptions on unmount
+    return () => {
+      supabase.removeChannel(itemsSubscription);
+      supabase.removeChannel(movementsSubscription);
+    };
+  }, []);
 
-    for (const m of movements) {
-      const key = m.item_id;
-      const delta = m.movement_type.toLowerCase() === "out" ? -m.quantity : m.quantity;
-      stockMap.set(key, (stockMap.get(key) || 0) + delta);
-    }
+  // Build maps
+  const itemMap = new Map(items.map((i) => [i.id, i]));
+  const stockMap = new Map<string, number>();
 
-    const itemsWithStock = items.map((item) => ({
-      ...item,
-      current_stock: stockMap.get(item.id) || 0,
-    }));
+  for (const m of movements) {
+    const key = m.item_id;
+    const delta = m.movement_type.toLowerCase() === "out" ? -m.quantity : m.quantity;
+    stockMap.set(key, (stockMap.get(key) || 0) + delta);
+  }
 
-    const lowStockAlerts = itemsWithStock.filter((i) => i.current_stock <= i.min_stock);
+  const itemsWithStock = items.map((item) => ({
+    ...item,
+    current_stock: stockMap.get(item.id) || 0,
+  }));
 
-    const todayMovements = movements
-      .filter((m) => {
-        const d = new Date(m.created_at);
-        const now = new Date();
-        return d.getFullYear() === now.getFullYear() &&
-          d.getMonth() === now.getMonth() &&
-          d.getDate() === now.getDate();
-      })
-      .map((m) => {
-        const meta = itemMap.get(m.item_id);
-        return {
-          ...m,
-          name: meta?.name || 'פריט',
-          unit_type: meta?.unit_type || '',
-        };
-      });
+  const lowStockAlerts = itemsWithStock.filter((i) => i.current_stock <= i.min_stock);
 
-    // KPIs
-    const totalItemsCount = itemsWithStock.length;
-    const lowStockCount = lowStockAlerts.length;
-    const todayMovementsCount = todayMovements.length;
+  const todayMovements = movements
+    .filter((m) => {
+      const d = new Date(m.created_at);
+      const now = new Date();
+      return d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate();
+    })
+    .map((m) => {
+      const meta = itemMap.get(m.item_id);
+      return {
+        ...m,
+        name: meta?.name || 'פריט',
+        unit_type: meta?.unit_type || '',
+      };
+    });
 
+  // KPIs
+  const totalItemsCount = itemsWithStock.length;
+  const lowStockCount = lowStockAlerts.length;
+  const todayMovementsCount = todayMovements.length;
+
+  if (loading) {
     return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⏳</div>
+          <p className="text-xl font-semibold text-slate-700">טוען נתונים...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
       <div className="px-4 py-8 min-h-screen">
         <div className="mx-auto max-w-6xl">
           {/* Header */}
@@ -396,32 +454,4 @@ export default async function WarehouseDashboard() {
         </div>
       </div>
     );
-  } catch (error: any) {
-    const errorMsg = error?.message || JSON.stringify(error);
-    console.error("Dashboard error:", error);
-    return (
-      <div className="mx-auto max-w-7xl px-4 py-12 min-h-screen flex items-center justify-center">
-        <div className="rounded-2xl border-2 border-red-300 bg-gradient-to-br from-red-50 to-red-100 p-10 max-w-md shadow-lg">
-          <div className="text-5xl text-center mb-4">🚨</div>
-          <h1 className="text-2xl font-bold text-red-900 text-center mb-3">שגיאה בטעינת לוח המחוונים</h1>
-          <p className="text-red-800 text-center mb-6 bg-white/50 p-4 rounded-lg font-mono text-sm">{errorMsg}</p>
-          <div className="bg-white/60 rounded-lg p-4 mb-6">
-            <p className="text-sm text-red-800 font-semibold mb-3">✓ בדוק את הדברים הבאים:</p>
-            <ul className="text-sm text-red-700 space-y-2 list-disc list-inside">
-              <li>חיבור פעיל ל-Supabase</li>
-              <li>משתנים סביבה (NEXT_PUBLIC_SUPABASE_URL)</li>
-              <li>הרשאות RLS בטבלאות</li>
-              <li>הרצת המיגרציה: 2026-01-08-wms-clean-schema.sql</li>
-            </ul>
-          </div>
-          <button 
-            onClick={() => window.location.reload()}
-            className="w-full bg-red-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-red-700 transition-colors"
-          >
-            🔄 נסה שנית
-          </button>
-        </div>
-      </div>
-    );
-  }
 }
