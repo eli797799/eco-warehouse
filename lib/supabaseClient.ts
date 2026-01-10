@@ -7,6 +7,12 @@ if (!url || !anonKey) {
   // keep quiet at import time; runtime code should handle missing envs
 }
 
-export const supabase = createClient(url, anonKey);
+export const supabase = createClient(url, anonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+});
 
 export default supabase;
