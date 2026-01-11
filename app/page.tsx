@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import ExportButton from "./components/ExportButton";
 
 type Item = {
   id: string;
@@ -18,9 +19,21 @@ type Movement = {
   created_at: string;
 };
 
+type ExpiringItem = {
+  id: string;
+  item_id: string;
+  name: string;
+  unit_type: string;
+  quantity: number;
+  expiry_date: string;
+  days_until_expiry: number;
+  expiry_status: 'expired' | 'critical' | 'warning' | 'ok';
+};
+
 export default function WarehouseDashboard() {
   const [items, setItems] = useState<Item[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [expiringItems, setExpiringItems] = useState<ExpiringItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -48,6 +61,17 @@ export default function WarehouseDashboard() {
 
         setItems(itemsData ?? []);
         setMovements(movementsData ?? []);
+
+        // Fetch expiring items
+        const { data: expiringData, error: expiringError } = await supabase
+          .from("expiring_items")
+          .select("*")
+          .order("expiry_date", { ascending: true });
+
+        if (!expiringError) {
+          setExpiringItems(expiringData ?? []);
+        }
+
         setLoading(false);
       } catch (err) {
         console.error("Error loading data:", err);
@@ -187,11 +211,78 @@ export default function WarehouseDashboard() {
           </div>
         </section>
 
+        {/* Expiring Items Alert Section */}
+        {expiringItems.length > 0 && (
+          <section className="mb-10">
+            <div className="rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-6 shadow-lg">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="text-3xl">⚠️</div>
+                <h2 className="text-xl font-bold text-amber-900">התראות תפוגה</h2>
+                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-200 text-amber-900">
+                  {expiringItems.length} פריטים
+                </span>
+              </div>
+              <p className="text-sm text-amber-800 mb-4">
+                פריטים עם תאריך תפוגה ב-30 הימים הקרובים או שכבר פגו תוקף
+              </p>
+              <div className="space-y-3">
+                {expiringItems.map((item) => {
+                  const isExpired = item.expiry_status === 'expired';
+                  const isCritical = item.expiry_status === 'critical';
+                  
+                  return (
+                    <div
+                      key={item.id}
+                      className={`rounded-xl p-4 border-l-4 ${
+                        isExpired
+                          ? 'bg-red-100 border-red-500'
+                          : isCritical
+                          ? 'bg-orange-100 border-orange-500'
+                          : 'bg-yellow-100 border-yellow-500'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-bold text-slate-900">{item.name}</p>
+                          <p className="text-sm text-slate-700 mt-1">
+                            כמות: {item.quantity} {item.unit_type}
+                          </p>
+                          <p className="text-xs text-slate-600 mt-1">
+                            תאריך תפוגה: {new Date(item.expiry_date).toLocaleDateString('he-IL')}
+                          </p>
+                        </div>
+                        <div className="text-left">
+                          <span
+                            className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
+                              isExpired
+                                ? 'bg-red-200 text-red-900'
+                                : isCritical
+                                ? 'bg-orange-200 text-orange-900'
+                                : 'bg-yellow-200 text-yellow-900'
+                            }`}
+                          >
+                            {isExpired
+                              ? `פג תוקף ${Math.abs(item.days_until_expiry)} ימים`
+                              : `${item.days_until_expiry} ימים`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Stock Status Table */}
         <section className="mb-10">
-          <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-2xl font-bold text-slate-900">📦 מצב מלאי עדכני</h2>
-            <span className="px-4 py-2 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">{itemsWithStock.length} פריטים</span>
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold text-slate-900">📦 מצב מלאי עדכני</h2>
+              <span className="px-4 py-2 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">{itemsWithStock.length} פריטים</span>
+            </div>
+            <ExportButton items={itemsWithStock} />
           </div>
           
           {itemsWithStock.length === 0 ? (
@@ -354,7 +445,7 @@ export default function WarehouseDashboard() {
                   </thead>
                   <tbody className="divide-y divide-white/20">
                     {todayMovements.map((movement, index) => {
-                      const isInMovement = movement.movement_type === "IN";
+                      const isInMovement = movement.movement_type.toLowerCase() === "in";
                       const timeStr = new Date(movement.created_at).toLocaleTimeString("he-IL", {
                         hour: "2-digit",
                         minute: "2-digit"
@@ -404,7 +495,7 @@ export default function WarehouseDashboard() {
               {/* Mobile Cards */}
               <div className="md:hidden space-y-3 p-4">
                 {todayMovements.map((movement) => {
-                  const isInMovement = movement.movement_type === "IN";
+                  const isInMovement = movement.movement_type.toLowerCase() === "in";
                   const timeStr = new Date(movement.created_at).toLocaleTimeString("he-IL", {
                     hour: "2-digit",
                     minute: "2-digit"

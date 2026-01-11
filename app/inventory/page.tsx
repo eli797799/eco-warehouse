@@ -7,6 +7,9 @@ type Item = {
   name: string;
   unit_type: string;
   min_stock: number;
+  barcode?: string;
+  sku?: string;
+  package_quantity?: number;
 };
 
 export default function InventoryPage() {
@@ -14,6 +17,8 @@ export default function InventoryPage() {
   const [selectedItemId, setSelectedItemId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [barcodeSearch, setBarcodeSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
@@ -24,7 +29,7 @@ export default function InventoryPage() {
       try {
         const { data, error: err } = await supabase
           .from('items')
-          .select('id,name,unit_type,min_stock')
+          .select('id,name,unit_type,min_stock,barcode,sku,package_quantity')
           .order('name');
 
         if (err) throw err;
@@ -68,6 +73,32 @@ export default function InventoryPage() {
     };
   }, []);
 
+  const handleBarcodeSearch = () => {
+    if (!barcodeSearch.trim()) {
+      setError('הכנס/י ברקוד או מק"ט');
+      return;
+    }
+
+    const foundItem = items.find(
+      item => 
+        item.barcode === barcodeSearch.trim() || 
+        item.sku === barcodeSearch.trim()
+    );
+
+    if (foundItem) {
+      setSelectedItemId(foundItem.id);
+      if (foundItem.package_quantity) {
+        setQuantity(foundItem.package_quantity.toString());
+      }
+      setError('');
+      setMessage(`✅ נמצא: ${foundItem.name}`);
+      setTimeout(() => setMessage(''), 2000);
+    } else {
+      setError('❌ פריט לא נמצא');
+      setTimeout(() => setError(''), 2000);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -84,11 +115,6 @@ export default function InventoryPage() {
         throw new Error('הכמות חייבת להיות מספר חיובי');
       }
 
-      // CRITICAL: STATIC lowercase 'in' for RECEIVE/STOCK IN
-      console.log('🟢 VERIFICATION: Saving as STOCK IN movement (lowercase "in")');
-      console.log('Movement data:', { item_id: selectedItemId, quantity: numQuantity, movement_type: 'in' });
-      alert('🟢 Confirming STOCK IN movement');
-
       const { error: err } = await supabase
         .from('inventory_movements')
         .insert([
@@ -96,7 +122,8 @@ export default function InventoryPage() {
             item_id: selectedItemId,
             quantity: numQuantity,
             movement_type: 'in',
-            notes: notes || null
+            notes: notes || null,
+            expiry_date: expiryDate || null
           }
         ]);
 
@@ -106,6 +133,8 @@ export default function InventoryPage() {
       setSelectedItemId('');
       setQuantity('');
       setNotes('');
+      setExpiryDate('');
+      setBarcodeSearch('');
 
       setTimeout(() => setMessage(''), 3000);
     } catch (err: any) {
@@ -129,6 +158,35 @@ export default function InventoryPage() {
         {/* Glassmorphism Card */}
         <div className="backdrop-blur-xl bg-white/40 rounded-2xl border border-white/60 shadow-2xl p-8 space-y-6 mb-6">
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Barcode/SKU Search */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                🔍 ברקוד / מק״ט
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={barcodeSearch}
+                  onChange={(e) => setBarcodeSearch(e.target.value)}
+                  placeholder="סרוק או הקלד ברקוד/מק״ט"
+                  className="flex-1 px-4 py-3 rounded-xl bg-white/60 border border-white/40 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all duration-200"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleBarcodeSearch();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleBarcodeSearch}
+                  className="px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200"
+                >
+                  סרוק
+                </button>
+              </div>
+            </div>
+
             {/* Item Selection */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
@@ -164,6 +222,19 @@ export default function InventoryPage() {
                 onChange={(e) => setQuantity(e.target.value)}
                 placeholder="הכנס/י כמות"
                 className="w-full px-4 py-3 rounded-xl bg-white/60 border border-white/40 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all duration-200"
+              />
+            </div>
+
+            {/* Expiry Date */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                📅 תאריך תפוגה (אופציונלי)
+              </label>
+              <input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-white/60 border border-white/40 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all duration-200"
               />
             </div>
 

@@ -7,6 +7,9 @@ type Item = {
   name: string;
   unit_type: string;
   min_stock: number;
+  barcode?: string;
+  sku?: string;
+  package_quantity?: number;
   created_at: string;
 };
 
@@ -21,6 +24,9 @@ export default function MaterialsPage() {
   const [formName, setFormName] = useState('');
   const [formUnitType, setFormUnitType] = useState('units');
   const [formMinStock, setFormMinStock] = useState('0');
+  const [formBarcode, setFormBarcode] = useState('');
+  const [formSku, setFormSku] = useState('');
+  const [formPackageQty, setFormPackageQty] = useState('');
 
   const unitTypes = [
     { value: 'kg', label: 'קילוגרם (ק״ג)' },
@@ -84,13 +90,21 @@ export default function MaterialsPage() {
         throw new Error('סף אזהרה לא יכול להיות שלילי');
       }
 
+      const packageQty = formPackageQty ? parseInt(formPackageQty) : null;
+      if (packageQty !== null && packageQty <= 0) {
+        throw new Error('כמות באריזה חייבת להיות מספר חיובי');
+      }
+
       const { error: err } = await supabase
         .from('items')
         .insert([
           {
             name: formName.trim(),
             unit_type: formUnitType,
-            min_stock: minStock
+            min_stock: minStock,
+            barcode: formBarcode.trim() || null,
+            sku: formSku.trim() || null,
+            package_quantity: packageQty
           }
         ]);
 
@@ -100,6 +114,9 @@ export default function MaterialsPage() {
       setFormName('');
       setFormUnitType('units');
       setFormMinStock('0');
+      setFormBarcode('');
+      setFormSku('');
+      setFormPackageQty('');
 
       await loadItems();
 
@@ -112,10 +129,6 @@ export default function MaterialsPage() {
   };
 
   const handleDelete = async (itemId: string) => {
-    if (!confirm('הא ודאי שברצונך למחוק פריט זה?')) {
-      return;
-    }
-
     try {
       const { error: err } = await supabase
         .from('items')
@@ -190,6 +203,48 @@ export default function MaterialsPage() {
                 value={formMinStock}
                 onChange={(e) => setFormMinStock(e.target.value)}
                 placeholder="כמות מינימום"
+                className="w-full px-4 py-3 rounded-xl bg-white/60 border border-white/40 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
+              />
+            </div>
+
+            {/* Barcode - Optional */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                🏷️ ברקוד <span className="text-slate-500 text-xs">(אופציונלי)</span>
+              </label>
+              <input
+                type="text"
+                value={formBarcode}
+                onChange={(e) => setFormBarcode(e.target.value)}
+                placeholder="123456789"
+                className="w-full px-4 py-3 rounded-xl bg-white/60 border border-white/40 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
+              />
+            </div>
+
+            {/* SKU - Optional */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                🔖 מק"ט (SKU) <span className="text-slate-500 text-xs">(אופציונלי)</span>
+              </label>
+              <input
+                type="text"
+                value={formSku}
+                onChange={(e) => setFormSku(e.target.value)}
+                placeholder="PROD-001"
+                className="w-full px-4 py-3 rounded-xl bg-white/60 border border-white/40 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
+              />
+            </div>
+
+            {/* Package Quantity - Optional */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                📦 כמות באריזה <span className="text-slate-500 text-xs">(אופציונלי)</span>
+              </label>
+              <input
+                type="number"
+                value={formPackageQty}
+                onChange={(e) => setFormPackageQty(e.target.value)}
+                placeholder="למשל: 24"
                 className="w-full px-4 py-3 rounded-xl bg-white/60 border border-white/40 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
               />
             </div>
