@@ -44,16 +44,33 @@ export default function ReceptionPage() {
 
   async function loadMovements() {
     try {
-      let query = supabase.from('inventory_movements').select('*');
+      let query = supabase
+        .from('inventory_movements')
+        .select(`
+          *,
+          items (
+            name,
+            unit_type
+          )
+        `);
 
       if (filterType !== 'ALL') {
         query = query.eq('movement_type', filterType);
       }
 
-      const { data, error: err } = await query.order('date', { ascending: false });
+      const { data, error: err } = await query.order('created_at', { ascending: false });
 
       if (err) throw err;
-      setMovements(data || []);
+      
+      // Transform data to flatten the items object
+      const transformedData = (data || []).map((m: any) => ({
+        ...m,
+        name: m.items?.name || 'פריט לא ידוע',
+        unit_type: m.items?.unit_type || '',
+        date: m.created_at
+      }));
+      
+      setMovements(transformedData);
       setError('');
     } catch (err: any) {
       setError(err.message || 'Error loading movements');
@@ -221,9 +238,9 @@ export default function ReceptionPage() {
                     } space-y-2`}
                   >
                     <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-semibold text-slate-900">{movement.name}</p>
-                        <p className="text-xs text-slate-600 font-mono">{dateStr}</p>
+                      <div className="flex-1">
+                        <p className="font-bold text-lg text-slate-900">{movement.name}</p>
+                        <p className="text-xs text-slate-600 font-mono mt-1">{dateStr}</p>
                       </div>
                       <span
                         className={`text-xs font-bold px-2 py-1 rounded-full ${

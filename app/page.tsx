@@ -35,6 +35,9 @@ export default function WarehouseDashboard() {
   const [movements, setMovements] = useState<Movement[]>([]);
   const [expiringItems, setExpiringItems] = useState<ExpiringItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalItems, setModalItems] = useState<any[]>([]);
 
   useEffect(() => {
     async function loadData() {
@@ -128,7 +131,9 @@ export default function WarehouseDashboard() {
     current_stock: stockMap.get(item.id) || 0,
   }));
 
-  const lowStockAlerts = itemsWithStock.filter((i) => i.current_stock <= i.min_stock);
+  const lowStockAlerts = itemsWithStock.filter((i) => i.current_stock <= i.min_stock && i.current_stock > 0);
+  const outOfStockItems = itemsWithStock.filter((i) => i.current_stock === 0);
+  const activeStockItems = itemsWithStock.filter((i) => i.current_stock > 0);
 
   const todayMovements = movements
     .filter((m) => {
@@ -150,6 +155,7 @@ export default function WarehouseDashboard() {
   // KPIs
   const totalItemsCount = itemsWithStock.length;
   const lowStockCount = lowStockAlerts.length;
+  const outOfStockCount = outOfStockItems.length;
   const todayMovementsCount = todayMovements.length;
 
   if (loading) {
@@ -173,7 +179,7 @@ export default function WarehouseDashboard() {
           </section>
 
           {/* KPI Cards - Glassmorphism */}
-          <section className="grid gap-6 sm:grid-cols-3 mb-10">
+          <section className="grid gap-6 sm:grid-cols-4 mb-10">
             {/* Total Items Card */}
             <div className="rounded-2xl p-8 bg-white/40 backdrop-blur-lg border border-white/60 shadow-lg hover:shadow-xl transition-all duration-300">
               <div className="flex items-start justify-between">
@@ -186,15 +192,41 @@ export default function WarehouseDashboard() {
             </div>
           </div>
 
-          {/* Low Stock Alerts Card */}
-          <div className="rounded-2xl p-8 bg-white/40 backdrop-blur-lg border border-white/60 shadow-lg hover:shadow-xl transition-all duration-300">
+          {/* Low Stock Alerts Card - Clickable */}
+          <div 
+            onClick={() => {
+              setModalTitle('מלאי נמוך');
+              setModalItems(lowStockAlerts);
+              setModalOpen(true);
+            }}
+            className="rounded-2xl p-8 bg-white/40 backdrop-blur-lg border border-white/60 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer hover:scale-105"
+          >
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <p className="text-sm font-semibold text-slate-600 uppercase tracking-wider">מלאי נמוך</p>
                 <p className="text-5xl font-black text-amber-600 mt-3" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>{lowStockCount}</p>
-                <p className="text-xs text-slate-500 mt-3">⚠️ דורשים הזמנה</p>
+                <p className="text-xs text-slate-500 mt-3">⚠️ לחץ לפרטים</p>
               </div>
               <div className="text-5xl">🔔</div>
+            </div>
+          </div>
+
+          {/* Out of Stock Card - Clickable */}
+          <div 
+            onClick={() => {
+              setModalTitle('מוצרים שנגמרו');
+              setModalItems(outOfStockItems);
+              setModalOpen(true);
+            }}
+            className="rounded-2xl p-8 bg-white/40 backdrop-blur-lg border border-white/60 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer hover:scale-105"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-slate-600 uppercase tracking-wider">מוצרים שנגמרו</p>
+                <p className="text-5xl font-black text-red-600 mt-3" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>{outOfStockCount}</p>
+                <p className="text-xs text-slate-500 mt-3">🚫 חסר במלאי</p>
+              </div>
+              <div className="text-5xl">📭</div>
             </div>
           </div>
 
@@ -210,6 +242,46 @@ export default function WarehouseDashboard() {
             </div>
           </div>
         </section>
+
+        {/* Modal for Item Details */}
+        {modalOpen && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setModalOpen(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 flex justify-between items-center">
+                <h3 className="text-2xl font-bold">{modalTitle}</h3>
+                <button 
+                  onClick={() => setModalOpen(false)}
+                  className="text-3xl hover:bg-white/20 rounded-full w-10 h-10 flex items-center justify-center transition-all"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[60vh]">
+                {modalItems.length === 0 ? (
+                  <p className="text-center text-slate-600 py-8">אין פריטים להצגה</p>
+                ) : (
+                  <div className="space-y-3">
+                    {modalItems.map((item) => (
+                      <div key={item.id} className="flex justify-between items-center p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all">
+                        <div>
+                          <p className="font-bold text-slate-900">{item.name}</p>
+                          <p className="text-sm text-slate-600">מלאי נוכחי: {item.current_stock} {item.unit_type}</p>
+                        </div>
+                        <span className={`px-4 py-2 rounded-full text-sm font-semibold ${
+                          item.current_stock === 0 
+                            ? 'bg-red-100 text-red-700' 
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {item.current_stock === 0 ? 'חסר' : 'נמוך'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Expiring Items Alert Section */}
         {expiringItems.length > 0 && (
@@ -280,18 +352,18 @@ export default function WarehouseDashboard() {
           <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-bold text-slate-900">📦 מצב מלאי עדכני</h2>
-              <span className="px-4 py-2 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">{itemsWithStock.length} פריטים</span>
+              <span className="px-4 py-2 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">{activeStockItems.length} פריטים</span>
             </div>
             <ExportButton items={itemsWithStock} />
           </div>
           
-          {itemsWithStock.length === 0 ? (
+          {activeStockItems.length === 0 ? (
             <div className="rounded-2xl border-2 border-dashed border-slate-300 p-12 text-center backdrop-blur-xl bg-white/20">
               <div className="text-6xl mb-4">📭</div>
-              <h3 className="text-2xl font-bold text-slate-900 mb-2">אין פריטים במחסן</h3>
-              <p className="text-slate-600 mb-6">בואו נתחיל! הוסף את הפריט הראשון שלך.</p>
-              <a href="/materials" className="inline-block rounded-lg bg-emerald-600 text-white px-6 py-3 font-semibold hover:bg-emerald-700 transition-colors">
-                ➕ הוסף פריט ראשון
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">אין פריטים במלאי</h3>
+              <p className="text-slate-600 mb-6">כל המוצרים נגמרו. הזמן חומרים חדשים!</p>
+              <a href="/inventory" className="inline-block rounded-lg bg-emerald-600 text-white px-6 py-3 font-semibold hover:bg-emerald-700 transition-colors">
+                ➕ קבלת חומרים
               </a>
             </div>
           ) : (
@@ -308,7 +380,7 @@ export default function WarehouseDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/20">
-                    {itemsWithStock.map((item, index) => {
+                    {activeStockItems.map((item, index) => {
                       const isLowStock = item.current_stock <= item.min_stock;
                       const percentage = Math.min((item.current_stock / Math.max(item.min_stock, 1)) * 100, 100);
                       const unitLabels: Record<string, string> = {
@@ -415,6 +487,36 @@ export default function WarehouseDashboard() {
             </div>
           )}
         </section>
+
+        {/* Out of Stock Section */}
+        {outOfStockItems.length > 0 && (
+          <section className="mb-10">
+            <div className="flex items-center gap-3 mb-6">
+              <h2 className="text-2xl font-bold text-slate-900">📭 מוצרים שנגמרו</h2>
+              <span className="px-4 py-2 rounded-full text-xs font-semibold bg-red-100 text-red-800">{outOfStockItems.length} פריטים</span>
+            </div>
+            <div className="rounded-2xl border-2 border-red-300 overflow-hidden shadow-lg backdrop-blur-xl bg-red-50/40">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+                {outOfStockItems.map((item) => (
+                  <div key={item.id} className="rounded-xl p-4 bg-white border-2 border-red-200 hover:border-red-400 transition-all">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1">
+                        <p className="font-bold text-slate-900 text-lg">{item.name}</p>
+                        <p className="text-sm text-slate-600">{item.unit_type}</p>
+                      </div>
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-200 text-red-900">
+                        חסר
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                      סף מינימום: {item.min_stock} {item.unit_type}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Today's Movements */}
         <section>

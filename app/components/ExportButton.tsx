@@ -1,48 +1,45 @@
 "use client";
 import React from "react";
 
-type Props = {
-  products: any[];
-  movements: any[];
+type ItemWithStock = {
+  id: string;
+  name: string;
+  unit_type: string;
+  min_stock: number;
+  current_stock: number;
+  barcode?: string;
+  sku?: string;
 };
 
-export default function ExportButton({ products, movements }: Props) {
-  const handleExport = async () => {
-    const XLSX = await import('xlsx');
+type Props = {
+  items: ItemWithStock[];
+};
 
-    const prodSheet = XLSX.utils.json_to_sheet(
-      products.map(p => ({
-        id: p.id,
-        name: p.name,
-        type: p.type ?? '',
-        size: p.size ?? '',
-        material: p.material ?? '',
-        current_stock: p.current_stock ?? 0,
-        low_stock_threshold: p.low_stock_threshold ?? 0,
-      }))
-    );
+export default function ExportButton({ items }: Props) {
+  const handleExport = () => {
+    // Create CSV content
+    const headers = ['שם הפריט', 'מלאי נוכחי', 'יחידת מידה', 'סף אזהרה', 'ברקוד', 'מק"ט'];
+    const rows = items.map(item => [
+      item.name,
+      item.current_stock.toString(),
+      item.unit_type,
+      item.min_stock.toString(),
+      item.barcode || '',
+      item.sku || ''
+    ]);
 
-    const movSheet = XLSX.utils.json_to_sheet(
-      movements.map(m => ({
-        id: m.id,
-        product_id: m.product_id,
-        type: m.type,
-        quantity: m.quantity,
-        date: m.date,
-        notes: m.notes ?? '',
-      }))
-    );
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, prodSheet, 'Products');
-    XLSX.utils.book_append_sheet(wb, movSheet, 'Movements');
-
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbout], { type: 'application/octet-stream' });
+    // Add BOM for Hebrew support in Excel
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'eco-warehouse-export.xlsx';
+    a.download = `inventory-${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -50,8 +47,11 @@ export default function ExportButton({ products, movements }: Props) {
   };
 
   return (
-    <button onClick={handleExport} className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700">
-      יצא לאקסל
+    <button 
+      onClick={handleExport} 
+      className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 py-3 text-white font-semibold hover:from-emerald-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200"
+    >
+      📊 ייצא לאקסל (CSV)
     </button>
   );
 }
